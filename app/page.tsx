@@ -487,7 +487,7 @@ function Panel({
   title,
   children,
 }: {
-  refEl: React.RefObject<HTMLDivElement>;
+  refEl: React.RefObject<HTMLDivElement | null>;
   title: string;
   children: React.ReactNode;
 }) {
