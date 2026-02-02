@@ -7,6 +7,14 @@ type Props = {
   color?: string;
 };
 
+type Particle = {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  r: number;
+};
+
 export default function TechBackground({ color = "#e8e6e3" }: Props) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const rafRef = useRef<number | null>(null);
@@ -15,8 +23,10 @@ export default function TechBackground({ color = "#e8e6e3" }: Props) {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    const ctx = canvas.getContext("2d", { alpha: true });
-    if (!ctx) return;
+    // ✅ make ctx NON-NULL for TS everywhere below
+    const _ctx = canvas.getContext("2d", { alpha: true });
+    if (!_ctx) return;
+    const ctx: CanvasRenderingContext2D = _ctx;
 
     const prefersReduced =
       typeof window !== "undefined" &&
@@ -25,31 +35,27 @@ export default function TechBackground({ color = "#e8e6e3" }: Props) {
 
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
 
-    const state = {
+    const state: {
+      w: number;
+      h: number;
+      t: number;
+      particles: Particle[];
+      pointer: { x: number; y: number; active: boolean };
+    } = {
       w: 0,
       h: 0,
       t: 0,
-      particles: [] as {
-        x: number;
-        y: number;
-        vx: number;
-        vy: number;
-        r: number;
-      }[],
+      particles: [],
       pointer: { x: 0, y: 0, active: false },
     };
 
-    function resize() {
-      const { clientWidth, clientHeight } = canvas;
-      state.w = clientWidth;
-      state.h = clientHeight;
-      canvas.width = Math.floor(clientWidth * dpr);
-      canvas.height = Math.floor(clientHeight * dpr);
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-
-      // rebuild particles based on area
+    function rebuildParticles(clientWidth: number, clientHeight: number) {
       const density = 0.00008; // tweak for more/less
-      const count = Math.max(35, Math.floor(clientWidth * clientHeight * density));
+      const count = Math.max(
+        35,
+        Math.floor(clientWidth * clientHeight * density)
+      );
+
       state.particles = Array.from({ length: count }).map(() => ({
         x: Math.random() * clientWidth,
         y: Math.random() * clientHeight,
@@ -59,8 +65,29 @@ export default function TechBackground({ color = "#e8e6e3" }: Props) {
       }));
     }
 
+    function resize() {
+      const c = canvasRef.current;
+      if (!c) return;
+
+      const { clientWidth, clientHeight } = c;
+
+      state.w = clientWidth;
+      state.h = clientHeight;
+
+      c.width = Math.floor(clientWidth * dpr);
+      c.height = Math.floor(clientHeight * dpr);
+
+      // draw in CSS pixels (not device pixels)
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+      rebuildParticles(clientWidth, clientHeight);
+    }
+
     function onMove(e: PointerEvent) {
-      const rect = canvas.getBoundingClientRect();
+      const c = canvasRef.current;
+      if (!c) return;
+
+      const rect = c.getBoundingClientRect();
       state.pointer.x = e.clientX - rect.left;
       state.pointer.y = e.clientY - rect.top;
       state.pointer.active = true;
@@ -69,11 +96,6 @@ export default function TechBackground({ color = "#e8e6e3" }: Props) {
     function onLeave() {
       state.pointer.active = false;
     }
-
-    resize();
-    window.addEventListener("resize", resize);
-    canvas.addEventListener("pointermove", onMove);
-    canvas.addEventListener("pointerleave", onLeave);
 
     function draw() {
       state.t += 1;
@@ -95,11 +117,9 @@ export default function TechBackground({ color = "#e8e6e3" }: Props) {
       ctx.fillStyle = g;
       ctx.fillRect(0, 0, state.w, state.h);
 
-      // particles
       const maxDist = 130;
       const linkDist = maxDist * maxDist;
 
-      // pointer magnet
       const px = state.pointer.x;
       const py = state.pointer.y;
 
@@ -112,11 +132,12 @@ export default function TechBackground({ color = "#e8e6e3" }: Props) {
         if (p.x < 0 || p.x > state.w) p.vx *= -1;
         if (p.y < 0 || p.y > state.h) p.vy *= -1;
 
-        // slight pull toward pointer (subtle)
+        // subtle pull toward pointer
         if (state.pointer.active && !prefersReduced) {
           const dx = px - p.x;
           const dy = py - p.y;
           const d2 = dx * dx + dy * dy;
+
           if (d2 < 220 * 220) {
             p.x += dx * 0.0022;
             p.y += dy * 0.0022;
@@ -133,6 +154,7 @@ export default function TechBackground({ color = "#e8e6e3" }: Props) {
           const dx = a.x - b.x;
           const dy = a.y - b.y;
           const d2 = dx * dx + dy * dy;
+
           if (d2 < linkDist) {
             const alpha = 1 - d2 / linkDist;
             ctx.strokeStyle = hexToRgba(color, 0.14 * alpha);
@@ -144,7 +166,7 @@ export default function TechBackground({ color = "#e8e6e3" }: Props) {
         }
       }
 
-      // draw nodes last
+      // nodes
       for (const p of state.particles) {
         ctx.fillStyle = hexToRgba(color, 0.55);
         ctx.beginPath();
@@ -154,6 +176,12 @@ export default function TechBackground({ color = "#e8e6e3" }: Props) {
 
       rafRef.current = requestAnimationFrame(draw);
     }
+
+    // init
+    resize();
+    window.addEventListener("resize", resize);
+    canvas.addEventListener("pointermove", onMove);
+    canvas.addEventListener("pointerleave", onLeave);
 
     rafRef.current = requestAnimationFrame(draw);
 
