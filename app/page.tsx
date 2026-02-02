@@ -395,7 +395,9 @@ function Nav({
 
       {worksOpen && (
         <Panel refEl={worksRef} title="Selected Work">
-          <a className="group inline-flex items-center gap-2 text-lg opacity-90 hover:opacity-100 transition">
+          <a href="https://wasimat404.github.io/Oasis-Library/"   
+      target="_blank"
+          className="group inline-flex items-center gap-2 text-lg opacity-90 hover:opacity-100 transition">
             Oasis-Library ↗
           </a>
         </Panel>
